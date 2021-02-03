@@ -79,27 +79,30 @@ namespace Exertion
                         if (ExertedSkills.ContainsKey(skill.InternalName))
                         {
                             ExertedSkills[skill.InternalName] = new ExertedSkill(skill.InternalName, buff.Charges, skill.Id);
-                        } else
+                        }
+                        else
                         {
                             ExertedSkills.Add(skill.InternalName, new ExertedSkill(skill.InternalName, buff.Charges, skill.Id));
                         }
                     }
                 }
             }
-            foreach(var skill in ExertedSkills)
-                if(skill.Value.Charges > 0 && !buffs.Any(x => skill.Value.Id.Equals(ingameState.M.Read<ushort>(x.Address + 0x38))))
-                    ExertedSkills[skill.Key].Charges = 0;         
+            foreach (var skill in ExertedSkills)
+                if (skill.Value.Charges > 0 && !buffs.Any(x => skill.Value.Id.Equals(ingameState.M.Read<ushort>(x.Address + 0x38))))
+                    ExertedSkills[skill.Key].Charges = 0;
         }
 
         public override void Render()
         {
+            float scl = Settings.IconScale;
+            int iconPad = (int)(12 * Settings.IconScale);
             var exertedSkills = ExertedSkills.Where(x => x.Value.Charges > 0);
             int skillCount = exertedSkills.Count() - 1;
             int originStart = 0;
-            if (skillCount > 0) originStart -= 12 * skillCount;
+            if (skillCount > 0) originStart -= iconPad * skillCount;
             var origin = windowArea.Center.Translate((float)Settings.XAdjust, (float)Settings.YAdjust);
             if (ExertedSkills.Count > 0)
-                foreach(var skill in exertedSkills)
+                foreach (var skill in exertedSkills)
                 {
                     Color iconColour = Color.White;
                     switch (skill.Value.Name)
@@ -120,12 +123,14 @@ namespace Exertion
                             iconColour = Settings.AncestralCryColour;
                             break;
                     }
-                    Graphics.DrawText($"{skill.Value.Charges}", origin.Translate(originStart + 1, 0 + 1), Color.Black, FontAlign.Center);
-                    Graphics.DrawText($"{skill.Value.Charges}", origin.Translate(originStart, 0), Color.White, FontAlign.Center);
-                    Graphics.DrawImage("menu-colors.png",
-                        new RectangleF(origin.X + originStart - 12, origin.Y - 4, 24, 24),
-                        iconColour);
-                    originStart += 24;
+                    RectangleF iconRect = new RectangleF(origin.X + originStart - iconPad, origin.Y, iconPad * 2, iconPad * 2);
+                    if (Settings.DrawText)
+                    {
+                        Graphics.DrawText($"{skill.Value.Charges}", iconRect.Center.Translate(1, -7), Color.Black, FontAlign.Center);
+                        Graphics.DrawText($"{skill.Value.Charges}", iconRect.Center.Translate(0, -8), Color.White, FontAlign.Center);
+                    }
+                    Graphics.DrawImage("menu-colors.png", iconRect, iconColour);
+                    originStart += (int)(24 * scl);
                 }
 
         }

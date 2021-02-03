@@ -15,6 +15,8 @@ namespace Exertion
         [Menu("Intimidating Cry Icon Colour")] public ColorNode IntimidatingCryColour { get; set; } = new ColorNode(new Color(255, 140, 40, 240));
         [Menu("Rallying Cry Icon Colour")] public ColorNode RallyingCryColour { get; set; } = new ColorNode(new Color(120, 200, 40, 240));
         [Menu("Seismic Cry Icon Colour")] public ColorNode SeismicCryColour { get; set; } = new ColorNode(new Color(180, 180, 40, 240));
+        [Menu("Icon Size Scale")] public RangeNode<float> IconScale { get; set; } = new RangeNode<float>(1.0f, 0f, 5f);
+        [Menu("Show exertion count on icons")] public ToggleNode DrawText { get; set; } = new ToggleNode(true);
         public ToggleNode MultiThreading { get; set; } = new ToggleNode(true);
         public ToggleNode Enable { get; set; } = new ToggleNode(true);
 

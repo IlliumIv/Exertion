@@ -1,11 +1,17 @@
 ﻿using ExileCore;
 using ExileCore.PoEMemory.Components;
 using ExileCore.PoEMemory.MemoryObjects;
+using ExileCore.Shared;
 using ExileCore.Shared.Enums;
 using ExileCore.Shared.Helpers;
 using SharpDX;
+using System;
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using nuVector2 = System.Numerics.Vector2;
 using nuVector4 = System.Numerics.Vector4;
 
@@ -32,12 +38,8 @@ namespace Exertion
 
         public override Job Tick()
         {
-            if (Settings.MultiThreading)    //custom setting ToggleNode
-            {
+            if (Settings.MultiThreading)
                 return new Job(nameof(Exertion), TickLogic);
-                //return GameController.MultiThreadManager.AddJob(TickLogic, nameof(HealthBars));   //another way to enable multiprocessing
-            }
-
             TickLogic();
             return null;
         }
@@ -48,7 +50,16 @@ namespace Exertion
             "seismic_cry",
             "intimidating_cry",
             "rallying_cry",
-            "ancestral_cry"
+            "ancestral_cry",
+        };
+
+        private Dictionary<string, DateTime> LastCryTime = new Dictionary<string, DateTime>()
+        {
+            { "infernal_cry", new DateTime() },
+            { "seismic_cry", new DateTime() },
+            { "intimidating_cry", new DateTime() },
+            { "rallying_cry", new DateTime() },
+            { "ancestral_cry", new DateTime() },
         };
 
         private class ExertedSkill
@@ -64,32 +75,111 @@ namespace Exertion
             public int Id;
         }
 
-        private Dictionary<string, ExertedSkill> ExertedSkills = new Dictionary<string, ExertedSkill>();
+        private ConcurrentDictionary<string, ExertedSkill> ExertedSkills = new ConcurrentDictionary<string, ExertedSkill>();
         private void TickLogic()
         {
-            var buffs = ingameState.Data.LocalPlayer.Buffs;
+            Core.ParallelRunner.Run(new Coroutine(BuildExertedSkills(), this, "Build Skills"));
+        }
+
+        private IEnumerator BuildExertedSkills()
+        {
+            var buffs = ingameState.Data.LocalPlayer.Buffs.Where(x => x.Name == "display_num_empowered_attacks");
             var actorSkills = ingameState.Data.LocalPlayer.GetComponent<Actor>().ActorSkills;
             foreach (var buff in buffs)
             {
                 ushort skillId = ingameState.M.Read<ushort>(buff.Address + 0x38);
                 foreach (var skill in actorSkills.Where(x => x.Id == skillId))
-                {
-                    if (ExertableSkills.Contains(skill.InternalName))
-                    {
+                    if (ExertableSkills.Any(x => x.Contains(skill.InternalName)))
                         if (ExertedSkills.ContainsKey(skill.InternalName))
-                        {
-                            ExertedSkills[skill.InternalName] = new ExertedSkill(skill.InternalName, buff.Charges, skill.Id);
-                        }
+                            ExertedSkills[skill.InternalName].Charges = buff.Charges;
                         else
-                        {
-                            ExertedSkills.Add(skill.InternalName, new ExertedSkill(skill.InternalName, buff.Charges, skill.Id));
-                        }
-                    }
-                }
+                            ExertedSkills.TryAdd(skill.InternalName, new ExertedSkill(skill.InternalName, buff.Charges, skill.Id));
             }
+
             foreach (var skill in ExertedSkills)
                 if (skill.Value.Charges > 0 && !buffs.Any(x => skill.Value.Id.Equals(ingameState.M.Read<ushort>(x.Address + 0x38))))
                     ExertedSkills[skill.Key].Charges = 0;
+
+            yield return AutoExert();
+        }
+
+        private static IEnumerator UseCry(int CryDelay, int CryPause, Keys key)
+        {
+            yield return new WaitTime(CryDelay);
+            Keyboard.KeyDown(key);
+            yield return new WaitTime(20);
+            Keyboard.KeyUp(key);
+            yield return new WaitTime(CryPause);
+        }
+
+        private IEnumerator AutoExert()
+        {
+            while (GameController.IsLoading || !GameController.InGame)
+                yield return new WaitTime(200);
+            List<ActorSkill> actorSkills = ingameState.Data.LocalPlayer.GetComponent<Actor>().ActorSkills;
+            if (!GameController.Area.CurrentArea.IsHideout && !GameController.Area.CurrentArea.IsTown)
+            {
+                if (Settings.AutoInfernal && ExertedSkills.TryGetValue("infernal_cry", out ExertedSkill infernal))
+                    if (infernal.Charges == 0 && actorSkills.Any(x => x.InternalName == "infernal_cry"))
+                        if (LastCryTime.TryGetValue("infernal_cry", out DateTime lastCry))
+                        {
+                            if ((DateTime.Now - lastCry).TotalMilliseconds > Settings.InfernalCooldown)
+                            {
+                                yield return UseCry(Settings.CryDelay, Settings.CryPause, Settings.AutoInfernalKey);
+                                if (ExertedSkills["infernal_cry"].Charges != 0)
+                                    LastCryTime["infernal_cry"] = DateTime.Now;
+                            }
+                        }
+
+                if (Settings.AutoIntimidating && ExertedSkills.TryGetValue("intimidating_cry", out ExertedSkill intimidating))
+                    if (intimidating.Charges == 0 && actorSkills.Any(x => x.InternalName == "intimidating_cry"))
+                        if (LastCryTime.TryGetValue("intimidating_cry", out DateTime lastCry))
+                        {
+                            if ((DateTime.Now - lastCry).TotalMilliseconds > Settings.IntimidatingCooldown)
+                            {
+                                yield return UseCry(Settings.CryDelay, Settings.CryPause, Settings.AutoIntimidatingKey);
+                                if (ExertedSkills["intimidating_cry"].Charges != 0)
+                                    LastCryTime["intimidating_cry"] = DateTime.Now;
+                            }
+
+                        }
+
+                if (Settings.AutoRallying && ExertedSkills.TryGetValue("rallying_cry", out ExertedSkill rallying))
+                    if (rallying.Charges == 0 && actorSkills.Any(x => x.InternalName == "rallying_cry"))
+                        if (LastCryTime.TryGetValue("rallying_cry", out DateTime lastCry))
+                        {
+                            if ((DateTime.Now - lastCry).TotalMilliseconds > Settings.RallyingCooldown)
+                            {
+                                yield return UseCry(Settings.CryDelay, Settings.CryPause, Settings.AutoRallyingKey);
+                                if (ExertedSkills["rallying_cry"].Charges != 0)
+                                    LastCryTime["rallying_cry"] = DateTime.Now;
+                            }
+
+                        }
+
+                if (Settings.AutoAncestral && ExertedSkills.TryGetValue("ancestral_cry", out ExertedSkill ancestral))
+                    if (ancestral.Charges == 0 && actorSkills.Any(x => x.InternalName == "ancestral_cry"))
+                        if (LastCryTime.TryGetValue("ancestral_cry", out DateTime lastCry))
+                        {
+                            if ((DateTime.Now - lastCry).TotalMilliseconds > Settings.AncestralCooldown)
+                            {
+                                yield return UseCry(Settings.CryDelay, Settings.CryPause, Settings.AutoAncestralKey);
+                                if (ExertedSkills["ancestral_cry"].Charges != 0)
+                                    LastCryTime["ancestral_cry"] = DateTime.Now;
+                            }
+                        }
+
+                if (Settings.AutoSeismic && ExertedSkills.TryGetValue("seismic_cry", out ExertedSkill seismic))
+                    if (seismic.Charges == 0 && actorSkills.Any(x => x.InternalName == "seismic_cry"))
+                        if (LastCryTime.TryGetValue("seismic_cry", out DateTime lastCry))
+                            if ((DateTime.Now - lastCry).TotalMilliseconds > Settings.SeismicCooldown)
+                            {
+                                yield return UseCry(Settings.CryDelay, Settings.CryPause, Settings.AutoSeismicKey);
+                                if (ExertedSkills["seismic_cry"].Charges != 0)
+                                    LastCryTime["seismic_cry"] = DateTime.Now;
+                            }
+            }
+            yield return new WaitTime(10);
         }
 
         public override void Render()
@@ -101,6 +191,7 @@ namespace Exertion
             int originStart = 0;
             if (skillCount > 0) originStart -= iconPad * skillCount;
             var origin = windowArea.Center.Translate((float)Settings.XAdjust, (float)Settings.YAdjust);
+
             if (ExertedSkills.Count > 0)
                 foreach (var skill in exertedSkills)
                 {
@@ -132,7 +223,36 @@ namespace Exertion
                     Graphics.DrawImage("menu-colors.png", iconRect, iconColour);
                     originStart += (int)(24 * scl);
                 }
+        }
 
+        public class Keyboard
+        {
+            [DllImport("user32.dll")]
+            private static extern uint keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo);
+
+            private const int KEYEVENTF_EXTENDEDKEY = 0x0001;
+            private const int KEYEVENTF_KEYUP = 0x0002;
+
+            [DllImport("user32.dll")]
+            public static extern bool BlockInput(bool fBlockIt);
+
+            public static void KeyDown(Keys key)
+            {
+                keybd_event((byte)key, 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+            }
+
+            public static void KeyUp(Keys key)
+            {
+                keybd_event((byte)key, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0); //0x7F
+            }
+
+            [DllImport("USER32.dll")]
+            private static extern short GetKeyState(int nVirtKey);
+
+            public static bool IsKeyDown(int nVirtKey)
+            {
+                return GetKeyState(nVirtKey) < 0;
+            }
         }
     }
 }

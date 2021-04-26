@@ -87,7 +87,7 @@ namespace Exertion
             var actorSkills = ingameState.Data.LocalPlayer.GetComponent<Actor>().ActorSkills;
             foreach (var buff in buffs)
             {
-                ushort skillId = ingameState.M.Read<ushort>(buff.Address + 0x38);
+                ushort skillId = ingameState.M.Read<ushort>(buff.Address + 0x3E);
                 foreach (var skill in actorSkills.Where(x => x.Id == skillId))
                     if (ExertableSkills.Any(x => x.Contains(skill.InternalName)))
                         if (ExertedSkills.ContainsKey(skill.InternalName))
@@ -97,7 +97,7 @@ namespace Exertion
             }
 
             foreach (var skill in ExertedSkills)
-                if (skill.Value.Charges > 0 && !buffs.Any(x => skill.Value.Id.Equals(ingameState.M.Read<ushort>(x.Address + 0x38))))
+                if (skill.Value.Charges > 0 && !buffs.Any(x => skill.Value.Id.Equals(ingameState.M.Read<ushort>(x.Address + 0x3E))))
                     ExertedSkills[skill.Key].Charges = 0;
 
             yield return AutoExert();

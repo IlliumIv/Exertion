@@ -8,6 +8,7 @@ namespace Exertion
 {
     public class ExertionSettings : ISettings
     {
+        [Menu("Show exertion icons")] public ToggleNode ShowIcons { get; set; } = new ToggleNode(true);
         [Menu("Icons X Coordinate Adjust")] public RangeNode<int> XAdjust { get; set; } = new RangeNode<int>(0, -1280, 1280);
         [Menu("Icons Y Coordinate Adjust")] public RangeNode<int> YAdjust { get; set; } = new RangeNode<int>(0, -1280, 1280);
         [Menu("Ancestral Cry Icon Colour")] public ColorNode AncestralCryColour { get; set; } = new ColorNode(new Color(100, 40, 40, 240));

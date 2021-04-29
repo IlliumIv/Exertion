@@ -2,6 +2,7 @@
 using ExileCore.PoEMemory.Components;
 using ExileCore.PoEMemory.MemoryObjects;
 using ExileCore.Shared;
+using ExileCore.Shared.Cache;
 using ExileCore.Shared.Enums;
 using ExileCore.Shared.Helpers;
 using SharpDX;
@@ -21,6 +22,10 @@ namespace Exertion
     {
         private IngameState ingameState;
         private RectangleF windowArea;
+        private CachedValue<bool> ingameUICheckVisible;
+        private Entity player;
+        private bool hasGracePeriod;
+        private bool playerIsUsingAbility;
 
         public override bool Initialise()
         {
@@ -28,6 +33,20 @@ namespace Exertion
             Name = "Exertion";
             ingameState = GameController.Game.IngameState;
             windowArea = GameController.Window.GetWindowRectangle();
+            
+            ingameUICheckVisible = new TimeCache<bool>(() =>
+            {
+                return ingameState.IngameUi.SyndicatePanel.IsVisibleLocal
+                || ingameState.IngameUi.SellWindow.IsVisibleLocal
+                || ingameState.IngameUi.DelveWindow.IsVisibleLocal
+                || ingameState.IngameUi.IncursionWindow.IsVisibleLocal
+                || ingameState.IngameUi.UnveilWindow.IsVisibleLocal
+                || ingameState.IngameUi.TreePanel.IsVisibleLocal
+                || ingameState.IngameUi.Atlas.IsVisibleLocal
+                || ingameState.IngameUi.CraftBench.IsVisibleLocal
+                || ingameState.IngameUi.InventoryPanel.IsVisibleLocal;
+            }, 250);
+
             return true;
         }
 
@@ -78,6 +97,10 @@ namespace Exertion
         private ConcurrentDictionary<string, ExertedSkill> ExertedSkills = new ConcurrentDictionary<string, ExertedSkill>();
         private void TickLogic()
         {
+            player = GameController.Player;
+            hasGracePeriod = player.HasComponent<Buffs>() ? player.GetComponent<Buffs>().HasBuff("grace_period") : false;
+            playerIsUsingAbility = player.HasComponent<Actor>() ? player.GetComponent<Actor>().Action == ActionFlags.UsingAbility : false;
+
             Core.ParallelRunner.Run(new Coroutine(BuildExertedSkills(), this, "Build Skills"));
         }
 
@@ -91,9 +114,9 @@ namespace Exertion
                 foreach (var skill in actorSkills.Where(x => x.Id == skillId))
                     if (ExertableSkills.Any(x => x.Contains(skill.InternalName)))
                         if (ExertedSkills.ContainsKey(skill.InternalName))
-                            ExertedSkills[skill.InternalName].Charges = buff.Charges;
+                            ExertedSkills[skill.InternalName].Charges = buff.BuffCharges;
                         else
-                            ExertedSkills.TryAdd(skill.InternalName, new ExertedSkill(skill.InternalName, buff.Charges, skill.Id));
+                            ExertedSkills.TryAdd(skill.InternalName, new ExertedSkill(skill.InternalName, buff.BuffCharges, skill.Id));
             }
 
             foreach (var skill in ExertedSkills)
@@ -114,7 +137,7 @@ namespace Exertion
 
         private IEnumerator AutoExert()
         {
-            while (GameController.IsLoading || !GameController.InGame)
+            while (GameController.IsLoading || !GameController.InGame || hasGracePeriod || playerIsUsingAbility)
                 yield return new WaitTime(200);
             List<ActorSkill> actorSkills = ingameState.Data.LocalPlayer.GetComponent<Actor>().ActorSkills;
             if (!GameController.Area.CurrentArea.IsHideout && !GameController.Area.CurrentArea.IsTown)
@@ -184,6 +207,9 @@ namespace Exertion
 
         public override void Render()
         {
+            if (!Settings.ShowIcons) return;
+            if (ingameUICheckVisible == null || ingameUICheckVisible.Value) return;
+
             float scl = Settings.IconScale;
             int iconPad = (int)(12 * Settings.IconScale);
             var exertedSkills = ExertedSkills.Where(x => x.Value.Charges > 0);

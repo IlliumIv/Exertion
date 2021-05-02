@@ -101,7 +101,8 @@ namespace Exertion
             hasGracePeriod = player.HasComponent<Buffs>() ? player.GetComponent<Buffs>().HasBuff("grace_period") : false;
             playerIsUsingAbility = player.HasComponent<Actor>() ? player.GetComponent<Actor>().Action == ActionFlags.UsingAbility : false;
 
-            Core.ParallelRunner.Run(new Coroutine(BuildExertedSkills(), this, "Build Skills"));
+            try { Core.ParallelRunner.Run(new Coroutine(BuildExertedSkills(), this, "Build Skills")); }
+            catch (Exception e) { if (Settings.Debug) throw e; }
         }
 
         private IEnumerator BuildExertedSkills()

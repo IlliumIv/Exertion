@@ -39,6 +39,7 @@ namespace Exertion
         [Menu("Ancestral Cry cooldown")] public RangeNode<int> AncestralCooldown { get; set; } = new RangeNode<int>(8020, 0, 15000);
 
         public ToggleNode MultiThreading { get; set; } = new ToggleNode(true);
+        public ToggleNode Debug { get; set; } = new ToggleNode(false);
         public ToggleNode Enable { get; set; } = new ToggleNode(true);
 
     }

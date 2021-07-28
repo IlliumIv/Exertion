@@ -115,9 +115,9 @@ namespace Exertion
                 foreach (var skill in actorSkills.Where(x => x.Id == skillId))
                     if (ExertableSkills.Any(x => x.Contains(skill.InternalName)))
                         if (ExertedSkills.ContainsKey(skill.InternalName))
-                            ExertedSkills[skill.InternalName].Charges = buff.BuffCharges;
+                            ExertedSkills[skill.InternalName].Charges = buff.Charges;
                         else
-                            ExertedSkills.TryAdd(skill.InternalName, new ExertedSkill(skill.InternalName, buff.BuffCharges, skill.Id));
+                            ExertedSkills.TryAdd(skill.InternalName, new ExertedSkill(skill.InternalName, buff.Charges, skill.Id));
             }
 
             foreach (var skill in ExertedSkills)
